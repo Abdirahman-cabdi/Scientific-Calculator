@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ 
+  <meta charset="UTF-8" />
+  <title>Math Chat Calculator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+  <script src="https://unpkg.com/mathlive"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 1040px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    #clearAll {
+      align-self: flex-end;
+      margin: 10px;
+      background: #f44336;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .message {
+      background: #e0e0e0;
+      padding: 10px;
+      margin: 6px 0;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+    .equation, .answer {
+      cursor: pointer;
+    }
+    .equation:hover { text-decoration: underline red; }
+    .answer:hover { text-decoration: underline blue; }
+    .delete-button {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #inputBar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-top: 2px solid #ccc;
+    }
+    math-field {
+      flex: 1;
+      font-size: 1.4em;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: white;
+    }
+    #sendBtn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 1em;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #keyboard {
+      display: flex;
+      flex-direction: row;
+      padding: 10px;
+      background: #C7D2E7;
+      gap: 20px;
+    }
+    .key-column {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      flex: 1;
+    }
+    .key {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: center;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      font-weight: bold;
+    }
+    .key.number {
+      background: #ffffff;
+      color: #000;
+    }
+    .key.operator {
+      background: #EAEFF6;
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div id="chat-container">
+    <button id="clearAll">Clear All</button>
+    <div id="chat"></div>
+  </div>
+
+  <div id="inputBar">
+    <math-field id="inputField" virtual-keyboard-mode="manual" placeholder="Type or insert equation..."></math-field>
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <div id="keyboard">
+    <div class="key-column" id="leftKeys"></div>
+    <div class="key-column" id="rightKeys"></div>
+  </div>
+</div>
+
+<script>
+  const inputField = document.getElementById('inputField');
+  const chat = document.getElementById('chat');
+  const sendBtn = document.getElementById('sendBtn');
+  const clearAllBtn = document.getElementById('clearAll');
+  const leftKeys = document.getElementById('leftKeys');
+  const rightKeys = document.getElementById('rightKeys');
+
+  const layoutLeft = [
+    ['x²', 'xˣ', 'x⁻¹', '√', 'ⁿ√'],
+    ['d/c', 'sin', 'cos', 'tan', 'π'],
+    ['sin⁻¹', 'cos⁻¹', 'tan⁻¹', 'log', 'AC']
+  ];
+
+  const layoutRight = [
+    ['7', '8', '9', '×', '÷'],
+    ['4', '5', '6', '+', '-'],
+    ['1', '2', '3', '⌫', '×10ⁿ'],
+    ['0', '.', '+/-', '<', '>']
+  ];
+
+  function insertTemplate(label) {
+    switch (label) {
+      case 'x²': return '{?}^{2}';
+      case 'xˣ': return '{?}^{?}';
+      case 'x⁻¹': return '{?}^{-1}';
+      case '√': return '\\sqrt{?}';
+      case 'ⁿ√': return '\\sqrt[?]{?}';
+      case 'd/c': return '\\frac{?}{?}';
+      case 'π': return '\\pi';
+      case 'log': return '\\log_{?}{?}';
+      case 'sin': return '\\sin';
+      case 'cos': return '\\cos';
+      case 'tan': return '\\tan';
+      case 'sin⁻¹': return '\\sin^{-1}';
+      case 'cos⁻¹': return '\\cos^{-1}';
+      case 'tan⁻¹': return '\\tan^{-1}';
+      case '×10ⁿ': return '\\cdot 10^{?}';
+      case '⌫': inputField.executeCommand('deleteBackward'); return '';
+      case 'AC': inputField.setValue(''); return '';
+      case '+/-': inputField.insert('-'); return '';
+      case '<': inputField.executeCommand('moveToPreviousChar'); return '';
+      case '>': inputField.executeCommand('moveToNextChar'); return '';
+      default: return label;
+    }
+  }
+
+  function addKeys(layout, container) {
+    layout.flat().forEach(label => {
+      const key = document.createElement('div');
+      key.className = 'key';
+      if (/^\d$|^\.$/.test(label)) {
+        key.classList.add('number');
+      } else {
+        key.classList.add('operator');
+      }
+      key.textContent = label;
+      key.onclick = () => {
+        const latex = insertTemplate(label);
+        if (latex) {
+          inputField.focus();
+          inputField.insert(latex);
+        }
+      };
+      container.appendChild(key);
+    });
+  }
+
+  addKeys(layoutLeft, leftKeys);
+  addKeys(layoutRight, rightKeys);
+
+  sendBtn.onclick = () => {
+    const latex = inputField.value.trim();
+    if (latex) {
+      try {
+        const plain = inputField.getValue("ascii-math");
+        const result = math.evaluate(plain);
+        addMessage(latex, result.toString());
+      } catch {
+        addMessage(latex, '\\text{Invalid}');
+      }
+      inputField.setValue('');
+    }
+  };
+
+  clearAllBtn.onclick = () => {
+    chat.innerHTML = '';
+  };
+
+  function addMessage(exprLatex, resultLatex) {
+    const div = document.createElement('div');
+    div.className = 'message';
+
+    const eq = document.createElement('span');
+    eq.className = 'equation';
+    eq.innerHTML = `\\(${exprLatex}\\)`;
+    eq.onclick = () => inputField.setValue(exprLatex);
+
+    const eqSign = document.createElement('span');
+    eqSign.innerText = ' = ';
+
+    const res = document.createElement('span');
+    res.className = 'answer';
+    res.innerHTML = `\\(${resultLatex}\\)`;
+    res.onclick = () => inputField.setValue(resultLatex);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-button';
+    delBtn.innerText = '×';
+    delBtn.onclick = () => div.remove();
+
+    div.append(eq, eqSign, res, delBtn);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    MathJax.typesetPromise([div]);
+  }
+</script>
+</body>
+</html>
